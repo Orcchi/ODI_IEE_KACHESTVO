@@ -1,1 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Определение ролей и задач</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #e9ecef; margin: 0; }
+        .card { background: white; padding: 2.5rem; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); text-align: center; width: 350px; transition: all 0.3s ease; }
+        h2 { color: #333; margin-top: 0; }
+        input { width: 100%; padding: 12px; margin: 15px 0; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; transition: border-color 0.2s; }
+        input:focus { border-color: #007bff; outline: none; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; width: 100%; font-size: 1.1rem; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        /* Стили для вывода результата */
+        #result-container { margin-top: 25px; padding-top: 20px; border-top: 2px solid #eee; display: none; /* Скрыт по умолчанию */ }
+        #role-name { font-weight: bold; font-size: 1.6rem; color: #28a745; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+        #role-description { font-size: 1rem; color: #555; line-height: 1.6; font-style: italic; background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: left;}
+        
+        .error { color: #dc3545; font-size: 0.9rem; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
 
+<div class="card">
+    <h2>Кто ты сегодня?</h2>
+    <input type="text" id="nickname" placeholder="Введите ваш ник (на русском)..." maxlength="20">
+    <button id="btnStart">Получить роль и задачу</button>
+    
+    <div id="result-container">
+        <div id="role-name"></div>
+        <div id="role-description"></div>
+    </div>
+    
+    <div id="error" class="error"></div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+  // !!! ВСТАВЬ СВОИ ДАННЫЕ ИЗ FIREBASE СЮДА !!!
+  const firebaseConfig = {
+    apiKey: "ВАШ_API_KEY",
+    authDomain: "ВАШ_PROJECT.firebaseapp.com",
+    databaseURL: "https://ВАШ_PROJECT.firebaseio.com",
+    projectId: "ВАШ_PROJECT_ID",
+    storageBucket: "ВАШ_PROJECT.appspot.com",
+    messagingSenderId: "ID",
+    appId: "APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // --- БАЗА ДАННЫХ РОЛЕЙ И ОПИСАНИЙ (МОЖНО РЕДАКТИРОВАТЬ) ---
+  const ROLES_DATA = {
+    "Инженер": "Проектировать и разрабатывать технические решения. Твоя задача — сделать так, чтобы всё работало надежно и эффективно. Проверяй чертежи и пиши код!",
+    "Менеджер": "Координировать работу команды. Твоя задача — следить за сроками, распределять ресурсы и устранять препятствия. Убедись, что все знают, что делать.",
+    "Тестировщик": "Искать баги и сбои в продукте. Твоя задача — проверить все возможные сценарии использования и убедиться, что пользователь не столкнется с ошибками.",
+    "Дизайнер": "Создавать удобный и красивый интерфейс. Твоя задача — сделать продукт понятным для пользователя, нарисовать макеты и подобрать цвета.",
+    "Аналитик": "Собирать и изучать данные. Твоя задача — найти скрытые закономерности, составить отчеты и предложить улучшения на основе цифр.",
+    "Директор": "Принимать стратегические решения. Твоя задача — определить вектор развития компании, вдохновлять команду и нести ответственность за общий успех.",
+    "Тимлид": "Руководить группой специалистов. Твоя задача — помогать коллегам профессионально расти, проводить код-ревью и решать технические споры.",
+    "Стажер": "Учиться у опытных коллег. Твоя задача — выполнять небольшие задачи, задавать много вопросов и впитывать знания как губка."
+  };
+
+  // Получаем список только названий ролей (ключей объекта)
+  const ALL_ROLE_NAMES = Object.keys(ROLES_DATA);
+
+  const btn = document.getElementById('btnStart');
+  const nickInput = document.getElementById('nickname');
+  const resultContainer = document.getElementById('result-container');
+  const roleNameDiv = document.getElementById('role-name');
+  const roleDescDiv = document.getElementById('role-description');
+  const errorDiv = document.getElementById('error');
+
+  // Функция для вывода результата на экран
+  function showResult(roleName) {
+    roleNameDiv.innerText = roleName;
+    roleDescDiv.innerText = ROLES_DATA[roleName]; // Достаем описание по названию
+    resultContainer.style.display = 'block'; // Показываем блок с результатом
+    btn.innerText = "Роль получена";
+  }
+
+  btn.addEventListener('click', async () => {
+    const nick = nickInput.value.trim();
+    if (!nick) {
+        errorDiv.innerText = "Пожалуйста, введите ник!";
+        return;
+    }
+
+    btn.disabled = true;
+    errorDiv.innerText = "";
+    resultContainer.style.display = 'none'; // Скрываем старый результат
+    
+    try {
+        const assignmentsRef = ref(db, 'assignments');
+        const snapshot = await get(assignmentsRef);
+        const takenData = snapshot.val() || {};
+        const takenNicks = Object.keys(takenData);
+        const takenRoles = Object.values(takenData);
+
+        // 1. Проверяем, не получал ли этот человек уже роль
+        if (takenNicks.includes(nick)) {
+            const alreadyAssignedRole = takenData[nick];
+            errorDiv.innerText = `Внимание: ник '${nick}' уже занят!`;
+            showResult(alreadyAssignedRole); // Всё равно показываем его роль
+            btn.disabled = false;
+            btn.innerText = "Получить роль снова?";
+            return;
+        }
+
+        // 2. Фильтруем свободные роли
+        const availableRoles = ALL_ROLE_NAMES.filter(role => !takenRoles.includes(role));
+
+        if (availableRoles.length === 0) {
+            errorDiv.innerText = "К сожалению, все роли уже разобраны!";
+            btn.innerText = "Конец игры";
+            return;
+        }
+
+        // 3. Выбираем случайную
+        const randomRoleName = availableRoles[Math.floor(Math.random() * availableRoles.length)];
+
+        // 4. Записываем в базу
+        await set(ref(db, 'assignments/' + nick), randomRoleName);
+        
+        // 5. Показываем результат (с описанием)
+        showResult(randomRoleName);
+
+    } catch (e) {
+        console.error(e);
+        errorDiv.innerText = "Ошибка связи с базой данных. Проверьте настройки Firebase.";
+        btn.disabled = false;
+        btn.innerText = "Попробовать снова";
+    }
+  });
+</script>
+
+</body>
+</html>
